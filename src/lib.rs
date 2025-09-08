@@ -126,11 +126,11 @@ impl Matrix {
         match mode {
             SortOrder::RowMajor => {
                 permutation.sort_unstable_by(|&a, &b|
-                    (self.cols[a], self.rows[a]).cmp(&(self.cols[b], self.rows[b])));
+                    (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b])));
             },
             SortOrder::ColMajor => {
                 permutation.sort_unstable_by(|&a, &b|
-                    (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b])));
+                    (self.cols[a], self.rows[a]).cmp(&(self.cols[b], self.rows[b])));
             },
         };
 
