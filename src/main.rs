@@ -1,7 +1,7 @@
 use std::{fs::File, io::{self, BufReader, BufWriter, Write}, path::PathBuf};
 
 use clap::Parser;
-use row_col_major::*;
+use matrix_market_transform::*;
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
