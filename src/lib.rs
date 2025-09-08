@@ -120,32 +120,37 @@ impl Matrix {
 
     #[inline]
     pub fn sort(&mut self, mode: SortOrder) {
-        let mut permutation = permutation::Permutation::one(self.nvals);
+        let mut permutation: Vec<_> = (0..self.nvals).collect();
         // We can use an unstable sort, because no two elements can have the
         // same column and row index, i.e. there are no equal elements.
         match mode {
             SortOrder::RowMajor => {
-                permutation.indices.sort_unstable_by(|&a, &b|
+                permutation.sort_unstable_by(|&a, &b|
                     (self.cols[a], self.rows[a]).cmp(&(self.cols[b], self.rows[b])));
             },
             SortOrder::ColMajor => {
-                permutation.indices.sort_unstable_by(|&a, &b|
+                permutation.sort_unstable_by(|&a, &b|
                     (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b])));
             },
         };
 
-        permutation.apply_slice_in_place(&mut self.rows);
-        permutation.apply_slice_in_place(&mut self.cols);
+        permutation::apply(&mut permutation, &mut self.rows);
+        permutation::reset(&mut permutation);
+        permutation::apply(&mut permutation, &mut self.cols);
         match &mut self.vals {
             MatrixData::Real(xs) => {
-                permutation.apply_slice_in_place(xs);
+                permutation::reset(&mut permutation);
+                permutation::apply(&mut permutation, xs);
             },
             MatrixData::Complex(xs, ys) => {
-                permutation.apply_slice_in_place(xs);
-                permutation.apply_slice_in_place(ys);
+                permutation::reset(&mut permutation);
+                permutation::apply(&mut permutation, xs);
+                permutation::reset(&mut permutation);
+                permutation::apply(&mut permutation, ys);
             },
             MatrixData::Integer(xs) => {
-                permutation.apply_slice_in_place(xs);
+                permutation::reset(&mut permutation);
+                permutation::apply(&mut permutation, xs);
             },
             MatrixData::Binary() => {
                 /* nothing to do */
