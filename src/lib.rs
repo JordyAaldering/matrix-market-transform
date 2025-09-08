@@ -1,5 +1,3 @@
-mod permutation;
-
 use std::{fmt, io::{BufRead, BufReader, Read}};
 
 #[derive(Copy, Clone, Debug)]
@@ -73,7 +71,9 @@ impl Matrix {
     pub fn from_reader<R: Read>(rdr: &mut BufReader<R>, data_type: DataType) -> Self {
         let mut lines = rdr.lines()
             .map_while(Result::ok)
-            .filter(|line| !line.starts_with('%'));
+            .skip_while(|line| line.starts_with('%'));
+            // If comments can appear anywhere, and not just at the start, we should use a filter instead
+            //.filter(|line| !line.starts_with('%'));
 
         if let Some(header) = lines.next() {
             let mut parts = header.split_ascii_whitespace();
@@ -134,23 +134,49 @@ impl Matrix {
             },
         };
 
-        permutation::apply(&mut permutation, &mut self.rows);
-        permutation::reset(&mut permutation);
-        permutation::apply(&mut permutation, &mut self.cols);
+        self.apply_permutation(&mut permutation);
+    }
+
+    /// Apply a permutation to a slice of elements.
+    ///
+    /// Extracted from https://github.com/jeremysalwen/rust-permutations.
+    #[inline]
+    fn apply_permutation(&mut self, permutation: &mut Vec<usize>) {
+        for i in 0..self.nvals {
+            let i_idx = permutation[i];
+
+            if idx_is_marked(i_idx) {
+                continue;
+            }
+
+            let mut j = i;
+            let mut j_idx = i_idx;
+
+            // When we loop back to the first index, we stop
+            while j_idx != i {
+                permutation[j] = toggle_mark_idx(j_idx);
+                self.swap(j, j_idx);
+                j = j_idx;
+                j_idx = permutation[j];
+            }
+
+            permutation[j] = toggle_mark_idx(j_idx);
+        }
+    }
+
+    #[inline]
+    fn swap(&mut self, a: usize, b: usize) {
+        self.rows.swap(a, b);
         match &mut self.vals {
             MatrixData::Real(xs) => {
-                permutation::reset(&mut permutation);
-                permutation::apply(&mut permutation, xs);
+                xs.swap(a, b);
             },
             MatrixData::Complex(xs, ys) => {
-                permutation::reset(&mut permutation);
-                permutation::apply(&mut permutation, xs);
-                permutation::reset(&mut permutation);
-                permutation::apply(&mut permutation, ys);
+                xs.swap(a, b);
+                ys.swap(a, b);
             },
             MatrixData::Integer(xs) => {
-                permutation::reset(&mut permutation);
-                permutation::apply(&mut permutation, xs);
+                xs.swap(a, b);
             },
             MatrixData::Binary() => {
                 /* nothing to do */
@@ -160,7 +186,7 @@ impl Matrix {
 }
 
 impl MatrixData {
-    #[inline]
+    #[inline(always)]
     fn new(data_type: DataType) -> Self {
         use MatrixData::*;
         match data_type {
@@ -171,7 +197,7 @@ impl MatrixData {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn with_capacity(data_type: DataType, nvals: usize) -> Self {
         use MatrixData::*;
         match data_type {
@@ -199,4 +225,18 @@ impl fmt::Display for Matrix {
 
         Ok(())
     }
+}
+
+/// Toggle the most-significant bit.
+#[inline(always)]
+fn toggle_mark_idx(idx: usize) -> usize {
+    const MASK: usize = isize::MIN as usize;
+    idx ^ MASK
+}
+
+/// Check if the most-significant bit is set.
+#[inline(always)]
+fn idx_is_marked(idx: usize) -> bool {
+    const MASK: usize = isize::MIN as usize;
+    (idx & MASK) != 0
 }
