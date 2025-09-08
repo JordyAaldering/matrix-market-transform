@@ -1,3 +1,5 @@
+mod permutation;
+
 use std::{fmt, io::{BufRead, BufReader, Read}};
 
 #[derive(Copy, Clone, Debug)]
@@ -118,19 +120,17 @@ impl Matrix {
 
     #[inline]
     pub fn sort(&mut self, mode: SortOrder) {
-        let idx: Vec<_> = (0..self.nvals).collect();
+        let mut permutation = permutation::Permutation::one(self.nvals);
         // We can use an unstable sort, because no two elements can have the
         // same column and row index, i.e. there are no equal elements.
-        let mut permutation = match mode {
+        match mode {
             SortOrder::RowMajor => {
-                permutation::sort_unstable_by(idx, |&a, &b|
-                    (self.cols[a], self.rows[a]).cmp(&(self.cols[b], self.rows[b]))
-                )
+                permutation.indices.sort_unstable_by(|&a, &b|
+                    (self.cols[a], self.rows[a]).cmp(&(self.cols[b], self.rows[b])));
             },
             SortOrder::ColMajor => {
-                permutation::sort_unstable_by(idx, |&a, &b|
-                    (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b]))
-                )
+                permutation.indices.sort_unstable_by(|&a, &b|
+                    (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b])));
             },
         };
 
