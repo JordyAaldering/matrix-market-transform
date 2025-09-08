@@ -48,6 +48,16 @@ pub struct Matrix {
     nvals: usize,
 }
 
+#[cfg(not(feature = "x32"))]
+#[derive(Clone, Debug)]
+enum MatrixData {
+    Real(Vec<f64>),
+    Complex(Vec<f64>, Vec<f64>),
+    Integer(Vec<i64>),
+    Binary(),
+}
+
+#[cfg(feature = "x32")]
 #[derive(Clone, Debug)]
 enum MatrixData {
     Real(Vec<f32>),
@@ -69,8 +79,8 @@ impl Matrix {
             let ncols = parts.next().unwrap().parse().unwrap();
             let nvals = parts.next().unwrap().parse().unwrap();
 
-            let mut rows: Vec<usize> = Vec::with_capacity(nvals);
-            let mut cols: Vec<usize> = Vec::with_capacity(nvals);
+            let mut rows = Vec::with_capacity(nvals);
+            let mut cols = Vec::with_capacity(nvals);
             let mut vals = MatrixData::with_capacity(data_type, nvals);
 
             for line in lines {
@@ -96,20 +106,19 @@ impl Matrix {
 
             Self { rows, cols, vals, nrows, ncols, nvals }
         } else {
+            // File is empty or contains only comments, return empty matrix
             Self {
                 rows: Vec::new(),
                 cols: Vec::new(),
                 vals: MatrixData::new(data_type),
-                nrows: 0,
-                ncols: 0,
-                nvals: 0,
+                nrows: 0, ncols: 0, nvals: 0,
             }
         }
     }
 
     #[inline]
     pub fn sort(&mut self, mode: SortOrder) {
-        let idx: Vec<usize> = (0..self.nvals).collect();
+        let idx: Vec<_> = (0..self.nvals).collect();
         // We can use an unstable sort, because no two elements can have the
         // same column and row index, i.e. there are no equal elements.
         let mut permutation = match mode {
