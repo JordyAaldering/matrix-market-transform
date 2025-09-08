@@ -1,6 +1,6 @@
 use std::{fs::File, hint::black_box, io::BufReader};
 use criterion::{criterion_group, criterion_main, Criterion};
-use row_col_major::{Matrix, DataType, SortOrder};
+use matrix_market_transform::*;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("group");
