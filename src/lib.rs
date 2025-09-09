@@ -128,8 +128,6 @@ impl Matrix {
         // same column and row index, i.e. there are no equal elements.
         match mode {
             SortOrder::RowMajor => {
-
-
                 permutation.sort_unstable_by(|&a, &b|
                     (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b])));
             },
