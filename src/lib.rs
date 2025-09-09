@@ -38,6 +38,7 @@ impl fmt::Display for SortOrder {
     }
 }
 
+#[repr(align(64))]
 #[derive(Clone, Debug)]
 pub struct Matrix {
     rows: Vec<usize>,
@@ -49,6 +50,7 @@ pub struct Matrix {
 }
 
 #[cfg(not(feature = "x32"))]
+#[repr(align(64))]
 #[derive(Clone, Debug)]
 enum MatrixData {
     Real(Vec<f64>),
@@ -58,6 +60,7 @@ enum MatrixData {
 }
 
 #[cfg(feature = "x32")]
+#[repr(align(64))]
 #[derive(Clone, Debug)]
 enum MatrixData {
     Real(Vec<f32>),
@@ -125,6 +128,8 @@ impl Matrix {
         // same column and row index, i.e. there are no equal elements.
         match mode {
             SortOrder::RowMajor => {
+
+
                 permutation.sort_unstable_by(|&a, &b|
                     (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b])));
             },
@@ -138,29 +143,25 @@ impl Matrix {
     }
 
     /// Apply a permutation to a slice of elements.
-    ///
-    /// Extracted from https://github.com/jeremysalwen/rust-permutations.
     #[inline]
     fn apply_permutation(&mut self, permutation: &mut Vec<usize>) {
         for i in 0..self.nvals {
-            let i_idx = permutation[i];
-
-            if idx_is_marked(i_idx) {
+            if is_visited(permutation[i]) {
                 continue;
             }
 
             let mut j = i;
-            let mut j_idx = i_idx;
+            let mut j_idx = permutation[i];
 
             // When we loop back to the first index, we stop
-            while j_idx != i {
-                permutation[j] = toggle_mark_idx(j_idx);
+            while i != j_idx {
+                permutation[j] = mark_visited(j_idx);
                 self.swap(j, j_idx);
                 j = j_idx;
                 j_idx = permutation[j];
             }
 
-            permutation[j] = toggle_mark_idx(j_idx);
+            permutation[j] = mark_visited(j_idx);
         }
     }
 
@@ -227,16 +228,16 @@ impl fmt::Display for Matrix {
     }
 }
 
-/// Toggle the most-significant bit.
+/// Mark the element at this index as visited by toggling the most-significant bit.
 #[inline(always)]
-fn toggle_mark_idx(idx: usize) -> usize {
+fn mark_visited(idx: usize) -> usize {
     const MASK: usize = isize::MIN as usize;
     idx ^ MASK
 }
 
-/// Check if the most-significant bit is set.
+/// Check if the element at this index has been visited by reading the most-significant bit.
 #[inline(always)]
-fn idx_is_marked(idx: usize) -> bool {
+fn is_visited(idx: usize) -> bool {
     const MASK: usize = isize::MIN as usize;
     (idx & MASK) != 0
 }
