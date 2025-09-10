@@ -1,4 +1,4 @@
-use std::{fs::File, io::{self, BufReader, BufWriter, Write}, path::PathBuf};
+use std::{fs::File, io::{self, BufReader, BufWriter, Write}, path::PathBuf, time::Instant};
 
 use clap::Parser;
 use matrix_market_transform::*;
@@ -28,13 +28,24 @@ fn main() -> io::Result<()> {
 
     let file = File::open(input_file)?;
     let mut rdr = BufReader::new(file);
+
+    let now = Instant::now();
     let mut m = Matrix::from_reader(&mut rdr, data_type);
+    println!("Read: {:?}", now.elapsed());
+    println!("{:#?}", m);
+
+    let now = Instant::now();
     m.sort(sort_order);
+    println!("Sort: {:?}", now.elapsed());
+    println!("{:#?}", m);
 
     if let Some(path) = output_file {
         let file = File::create(path)?;
         let mut wtr = BufWriter::new(file);
+
+        let now = Instant::now();
         write!(wtr, "{}", m)?;
+        println!("Write: {:?}", now.elapsed());
     }
 
     Ok(())

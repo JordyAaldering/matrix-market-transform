@@ -3,17 +3,13 @@ name = "matrix-market-transform"
 version = "0.1.0"
 edition = "2024"
 
-[[bin]]
-name = "matrix_market_transform"
-path = "src/main.rs"
-
 [lib]
 name = "matrix_market_transform"
 path = "src/lib.rs"
 
-[[bench]]
-name = "bench"
-harness = false
+[[bin]]
+name = "matrix_market_transform"
+path = "src/main.rs"
 
 [profile.release]
 opt-level = 3
@@ -21,15 +17,9 @@ lto = "thin"
 panic = "abort"
 codegen-units = 1
 
-[profile.release.package."*"]
-opt-level = 3
-
 [features]
 # Use 32-bit values instead of the default 64-bit.
 x32 = []
 
 [dependencies]
 clap = { version = "4.5.47", features = ["derive"] }
-
-[dev-dependencies]
-criterion = "0.7.0"

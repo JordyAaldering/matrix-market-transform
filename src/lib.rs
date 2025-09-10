@@ -39,7 +39,6 @@ impl fmt::Display for SortOrder {
 }
 
 #[repr(align(64))]
-#[derive(Clone, Debug)]
 pub struct Matrix {
     rows: Vec<usize>,
     cols: Vec<usize>,
@@ -51,7 +50,6 @@ pub struct Matrix {
 
 #[cfg(not(feature = "x32"))]
 #[repr(align(64))]
-#[derive(Clone, Debug)]
 enum MatrixData {
     Real(Vec<f64>),
     Complex(Vec<f64>, Vec<f64>),
@@ -61,7 +59,6 @@ enum MatrixData {
 
 #[cfg(feature = "x32")]
 #[repr(align(64))]
-#[derive(Clone, Debug)]
 enum MatrixData {
     Real(Vec<f32>),
     Complex(Vec<f32>, Vec<f32>),
@@ -137,12 +134,11 @@ impl Matrix {
             },
         };
 
-        self.apply_permutation(&mut permutation);
+        self.apply(permutation);
     }
 
-    /// Apply a permutation to a slice of elements.
     #[inline]
-    fn apply_permutation(&mut self, permutation: &mut Vec<usize>) {
+    fn apply(&mut self, mut permutation: Vec<usize>) {
         for i in 0..self.nvals {
             if is_visited(permutation[i]) {
                 continue;
@@ -185,7 +181,7 @@ impl Matrix {
 }
 
 impl MatrixData {
-    #[inline(always)]
+    #[inline]
     fn new(data_type: DataType) -> Self {
         use MatrixData::*;
         match data_type {
@@ -196,7 +192,7 @@ impl MatrixData {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn with_capacity(data_type: DataType, nvals: usize) -> Self {
         use MatrixData::*;
         match data_type {
@@ -211,18 +207,46 @@ impl MatrixData {
 impl fmt::Display for Matrix {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "{} {} {}", self.nrows, self.ncols, self.nvals)?;
-
-        for i in 0..self.nvals {
+        (0..self.nvals).try_for_each(|i| {
             use MatrixData::*;
             match &self.vals {
-                Real(xs) => writeln!(f, "{} {} {}", self.rows[i], self.cols[i], xs[i])?,
-                Complex(xs, ys) => writeln!(f, "{} {} {} {}", self.rows[i], self.cols[i], xs[i], ys[i])?,
-                Integer(xs) => writeln!(f, "{} {} {}", self.rows[i], self.cols[i], xs[i])?,
-                Binary() => writeln!(f, "{} {}", self.rows[i], self.cols[i])?,
+                Real(xs) => writeln!(f, "{} {} {}", self.rows[i], self.cols[i], xs[i]),
+                Complex(xs, ys) => writeln!(f, "{} {} {} {}", self.rows[i], self.cols[i], xs[i], ys[i]),
+                Integer(xs) => writeln!(f, "{} {} {}", self.rows[i], self.cols[i], xs[i]),
+                Binary() => writeln!(f, "{} {}", self.rows[i], self.cols[i]),
             }
+        })
+    }
+}
+
+impl fmt::Debug for Matrix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let n = f.precision().unwrap_or(5);
+
+        let mut wtr = f.debug_struct("Matrix");
+        wtr.field("nrows", &self.nrows)
+            .field("ncols", &self.ncols)
+            .field("nvals", &self.nvals)
+            .field("rows", &format_args!("{:?}", &self.rows[..n]))
+            .field("cols", &format_args!("{:?}", &self.cols[..n]));
+
+        match &self.vals {
+            MatrixData::Real(xs) => {
+                wtr.field("real", &format_args!("{:?}", &xs[..n]));
+            },
+            MatrixData::Complex(xs, ys) => {
+                wtr.field("real", &format_args!("{:?}", &xs[..n]));
+                wtr.field("imag", &format_args!("{:?}", &ys[..n]));
+            },
+            MatrixData::Integer(xs) => {
+                wtr.field("int", &format_args!("{:?}", &xs[..n]));
+            },
+            MatrixData::Binary() => {
+                /* nothing to do */
+            },
         }
 
-        Ok(())
+        wtr.finish()
     }
 }
 
