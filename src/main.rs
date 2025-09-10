@@ -1,4 +1,10 @@
-use std::{fs::File, io::{self, BufReader, BufWriter, Write}, path::PathBuf, time::Instant};
+use std::{
+    fmt,
+    fs::File,
+    io::{self, BufReader, BufWriter, Write},
+    path::PathBuf,
+    time::Instant,
+};
 
 use clap::Parser;
 use matrix_market_transform::*;
@@ -18,6 +24,23 @@ struct Args {
     pub sort_order: SortOrder,
 }
 
+#[derive(Copy, Clone, Debug)]
+#[derive(clap::ValueEnum)]
+pub enum SortOrder {
+    RowMajor,
+    ColMajor,
+}
+
+impl fmt::Display for SortOrder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use SortOrder::*;
+        match self {
+            RowMajor => write!(f, "row-major"),
+            ColMajor => write!(f, "col-major"),
+        }
+    }
+}
+
 fn main() -> io::Result<()> {
     let Args {
         input_file,
@@ -35,7 +58,10 @@ fn main() -> io::Result<()> {
     println!("{:#?}", m);
 
     let now = Instant::now();
-    m.sort(sort_order);
+    match sort_order {
+        SortOrder::RowMajor => m.sort_row_major(),
+        SortOrder::ColMajor => m.sort_col_major(),
+    }
     println!("Sort: {:?}", now.elapsed());
     println!("{:#?}", m);
 

@@ -1,43 +1,5 @@
 use std::{fmt, io::{BufRead, BufReader, Read}};
 
-#[derive(Copy, Clone, Debug)]
-#[derive(clap::ValueEnum)]
-pub enum DataType {
-    Real,
-    Complex,
-    Integer,
-    Binary,
-}
-
-impl fmt::Display for DataType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use DataType::*;
-        match self {
-            Real => write!(f, "real"),
-            Complex => write!(f, "complex"),
-            Integer => write!(f, "integer"),
-            Binary => write!(f, "binary"),
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-#[derive(clap::ValueEnum)]
-pub enum SortOrder {
-    RowMajor,
-    ColMajor,
-}
-
-impl fmt::Display for SortOrder {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use SortOrder::*;
-        match self {
-            RowMajor => write!(f, "row-major"),
-            ColMajor => write!(f, "col-major"),
-        }
-    }
-}
-
 #[repr(align(64))]
 pub struct Matrix {
     rows: Vec<usize>,
@@ -64,6 +26,15 @@ enum MatrixData {
     Complex(Vec<f32>, Vec<f32>),
     Integer(Vec<i32>),
     Binary(),
+}
+
+#[derive(Copy, Clone, Debug)]
+#[derive(clap::ValueEnum)]
+pub enum DataType {
+    Real,
+    Complex,
+    Integer,
+    Binary,
 }
 
 impl Matrix {
@@ -119,21 +90,18 @@ impl Matrix {
     }
 
     #[inline]
-    pub fn sort(&mut self, mode: SortOrder) {
+    pub fn sort_row_major(&mut self) {
         let mut permutation: Vec<_> = (0..self.nvals).collect();
-        // We can use an unstable sort, because no two elements can have the
-        // same column and row index, i.e. there are no equal elements.
-        match mode {
-            SortOrder::RowMajor => {
-                permutation.sort_unstable_by(|&a, &b|
-                    (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b])));
-            },
-            SortOrder::ColMajor => {
-                permutation.sort_unstable_by(|&a, &b|
-                    (self.cols[a], self.rows[a]).cmp(&(self.cols[b], self.rows[b])));
-            },
-        };
+        permutation.sort_unstable_by(|&a, &b|
+            (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b])));
+        self.apply(permutation);
+    }
 
+    #[inline]
+    pub fn sort_col_major(&mut self) {
+        let mut permutation: Vec<_> = (0..self.nvals).collect();
+        permutation.sort_unstable_by(|&a, &b|
+            (self.cols[a], self.rows[a]).cmp(&(self.cols[b], self.rows[b])));
         self.apply(permutation);
     }
 
@@ -183,24 +151,56 @@ impl Matrix {
 impl MatrixData {
     #[inline]
     fn new(data_type: DataType) -> Self {
-        use MatrixData::*;
+        use DataType::*;
         match data_type {
-            DataType::Real => Real(Vec::new()),
-            DataType::Complex => Complex(Vec::new(), Vec::new()),
-            DataType::Integer => Integer(Vec::new()),
-            DataType::Binary => Binary(),
+            Real => MatrixData::Real(Vec::new()),
+            Complex => MatrixData::Complex(Vec::new(), Vec::new()),
+            Integer => MatrixData::Integer(Vec::new()),
+            Binary => MatrixData::Binary(),
         }
     }
 
     #[inline]
     fn with_capacity(data_type: DataType, nvals: usize) -> Self {
-        use MatrixData::*;
+        use DataType::*;
         match data_type {
-            DataType::Real => Real(Vec::with_capacity(nvals)),
-            DataType::Complex => Complex(Vec::with_capacity(nvals), Vec::with_capacity(nvals)),
-            DataType::Integer => Integer(Vec::with_capacity(nvals)),
-            DataType::Binary => Binary(),
+            Real => MatrixData::Real(Vec::with_capacity(nvals)),
+            Complex => MatrixData::Complex(Vec::with_capacity(nvals), Vec::with_capacity(nvals)),
+            Integer => MatrixData::Integer(Vec::with_capacity(nvals)),
+            Binary => MatrixData::Binary(),
         }
+    }
+}
+
+impl fmt::Debug for Matrix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let n = f.width().unwrap_or(5);
+        let p = f.precision().unwrap_or(2);
+
+        let mut wtr = f.debug_struct("Matrix");
+        wtr.field("nrows", &self.nrows)
+            .field("ncols", &self.ncols)
+            .field("nvals", &self.nvals)
+            .field("rows", &format_args!("{:?}", &self.rows[..n]))
+            .field("cols", &format_args!("{:?}", &self.cols[..n]));
+
+        match &self.vals {
+            MatrixData::Real(xs) => {
+                wtr.field("real", &format_args!("{1:.*?}", p, &xs[..n]));
+            },
+            MatrixData::Complex(xs, ys) => {
+                wtr.field("real", &format_args!("{1:.*?}", p, &xs[..n]));
+                wtr.field("imag", &format_args!("{1:.*?}", p, &ys[..n]));
+            },
+            MatrixData::Integer(xs) => {
+                wtr.field("int", &format_args!("{:?}", &xs[..n]));
+            },
+            MatrixData::Binary() => {
+                /* nothing to do */
+            },
+        }
+
+        wtr.finish()
     }
 }
 
@@ -219,34 +219,15 @@ impl fmt::Display for Matrix {
     }
 }
 
-impl fmt::Debug for Matrix {
+impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let n = f.precision().unwrap_or(5);
-
-        let mut wtr = f.debug_struct("Matrix");
-        wtr.field("nrows", &self.nrows)
-            .field("ncols", &self.ncols)
-            .field("nvals", &self.nvals)
-            .field("rows", &format_args!("{:?}", &self.rows[..n]))
-            .field("cols", &format_args!("{:?}", &self.cols[..n]));
-
-        match &self.vals {
-            MatrixData::Real(xs) => {
-                wtr.field("real", &format_args!("{:?}", &xs[..n]));
-            },
-            MatrixData::Complex(xs, ys) => {
-                wtr.field("real", &format_args!("{:?}", &xs[..n]));
-                wtr.field("imag", &format_args!("{:?}", &ys[..n]));
-            },
-            MatrixData::Integer(xs) => {
-                wtr.field("int", &format_args!("{:?}", &xs[..n]));
-            },
-            MatrixData::Binary() => {
-                /* nothing to do */
-            },
+        use DataType::*;
+        match self {
+            Real => write!(f, "real"),
+            Complex => write!(f, "complex"),
+            Integer => write!(f, "integer"),
+            Binary => write!(f, "binary"),
         }
-
-        wtr.finish()
     }
 }
 
