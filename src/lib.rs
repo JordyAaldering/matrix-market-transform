@@ -43,13 +43,11 @@ pub enum DataType {
 impl Matrix {
     pub fn from_mmap(file: fs::File, data_type: DataType) -> Self {
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+        let mut lines = mmap.split(|&b| b == b'\n')
+            // We deliberately do not `map` yet because we are still in sequential mode
+            .skip_while(|b| b.trim_ascii()[0] == b'%');
 
-        let lines: Vec<&[u8]> = mmap.split(|&b| b == b'\n')
-            // We deliberately do not apply a `map` here first to trim, because we want to do minimal processing while still in sequential mode
-            .skip_while(|b| b.trim_ascii()[0] == b'%')
-            .collect();
-
-        if let Some((&header, tail)) = lines.split_first() {
+        if let Some(header) = lines.next() {
             let parts: Vec<_> = header.split(|&b| b.is_ascii_whitespace()).collect();
             let nrows = str::from_utf8(parts[0]).unwrap().parse().unwrap();
             let ncols = str::from_utf8(parts[1]).unwrap().parse().unwrap();
@@ -58,28 +56,26 @@ impl Matrix {
             let mut rows = vec![0usize; nvals];
             let mut cols = vec![0usize; nvals];
 
+            let lines: Vec<_> = lines.collect();
             let vals = match data_type {
                 DataType::Real => {
                     let mut xs = vec![0.0; nvals];
-
-                    tail.into_par_iter()
+                    lines.into_par_iter()
                         .zip(rows.par_iter_mut())
                         .zip(cols.par_iter_mut())
                         .zip(xs.par_iter_mut())
                         .for_each(|(((line, row), col), x)| {
-                            let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
+                            let parts: Vec<_> = line.trim_ascii().split(|&b| b.is_ascii_whitespace()).collect();
                             *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
                             *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
                             *x = str::from_utf8(parts[2]).unwrap().parse().unwrap();
                         });
-
                     MatrixData::Real(xs)
                 },
                 DataType::Complex => {
                     let mut xs = vec![0.0; nvals];
                     let mut ys = vec![0.0; nvals];
-
-                    tail.into_par_iter()
+                    lines.into_par_iter()
                         .zip(rows.par_iter_mut())
                         .zip(cols.par_iter_mut())
                         .zip(xs.par_iter_mut())
@@ -91,13 +87,11 @@ impl Matrix {
                             *x = str::from_utf8(parts[2]).unwrap().parse().unwrap();
                             *y = str::from_utf8(parts[3]).unwrap().parse().unwrap();
                         });
-
                     MatrixData::Complex(xs, ys)
                 },
                 DataType::Integer => {
                     let mut xs = vec![0; nvals];
-
-                    tail.into_par_iter()
+                    lines.into_par_iter()
                         .zip(rows.par_iter_mut())
                         .zip(cols.par_iter_mut())
                         .zip(xs.par_iter_mut())
@@ -107,11 +101,10 @@ impl Matrix {
                             *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
                             *x = str::from_utf8(parts[2]).unwrap().parse().unwrap();
                         });
-
                     MatrixData::Integer(xs)
                 },
                 DataType::Boolean => {
-                    tail.into_par_iter()
+                    lines.into_par_iter()
                         .zip(rows.par_iter_mut())
                         .zip(cols.par_iter_mut())
                         .for_each(|((line, row), col)| {
@@ -119,7 +112,6 @@ impl Matrix {
                             *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
                             *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
                         });
-
                     MatrixData::Boolean()
                 },
             };
