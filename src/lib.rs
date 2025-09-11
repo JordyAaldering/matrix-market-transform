@@ -19,7 +19,7 @@ enum MatrixData {
     Real(Vec<f32>),
     Complex(Vec<f32>, Vec<f32>),
     Integer(Vec<i32>),
-    Boolean(),
+    Bool(),
 }
 
 #[cfg(feature = "x64")]
@@ -28,7 +28,7 @@ enum MatrixData {
     Real(Vec<f64>),
     Complex(Vec<f64>, Vec<f64>),
     Integer(Vec<i64>),
-    Boolean(),
+    Bool(),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -37,7 +37,7 @@ pub enum DataType {
     Real,
     Complex,
     Integer,
-    Boolean,
+    Bool,
 }
 
 impl Matrix {
@@ -103,7 +103,7 @@ impl Matrix {
                         });
                     MatrixData::Integer(xs)
                 },
-                DataType::Boolean => {
+                DataType::Bool => {
                     lines.into_par_iter()
                         .zip(rows.par_iter_mut())
                         .zip(cols.par_iter_mut())
@@ -112,7 +112,7 @@ impl Matrix {
                             *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
                             *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
                         });
-                    MatrixData::Boolean()
+                    MatrixData::Bool()
                 },
             };
 
@@ -159,7 +159,7 @@ impl Matrix {
                     MatrixData::Integer(xs) => {
                         xs.push(parts[2].parse().unwrap())
                     },
-                    MatrixData::Boolean() => {
+                    MatrixData::Bool() => {
                         /* nothing to do */
                     },
                 }
@@ -232,7 +232,7 @@ impl Matrix {
                         *x = e.2;
                     });
             },
-            MatrixData::Boolean() => {
+            MatrixData::Bool() => {
                 let mut zipped: Vec<_> = (0..self.nvals)
                     .map(|i| (self.rows[i], self.cols[i]))
                     .collect();
@@ -305,7 +305,7 @@ impl Matrix {
                         *x = e.2;
                     });
             },
-            MatrixData::Boolean() => {
+            MatrixData::Bool() => {
                 let mut zipped: Vec<_> = (0..self.nvals)
                     .map(|i| (self.rows[i], self.cols[i]))
                     .collect();
@@ -377,7 +377,7 @@ impl Matrix {
             MatrixData::Integer(xs) => {
                 xs.swap(a, b);
             },
-            MatrixData::Boolean() => {
+            MatrixData::Bool() => {
                 /* nothing to do */
             },
         }
@@ -392,7 +392,7 @@ impl MatrixData {
             Real => MatrixData::Real(Vec::new()),
             Complex => MatrixData::Complex(Vec::new(), Vec::new()),
             Integer => MatrixData::Integer(Vec::new()),
-            Boolean => MatrixData::Boolean(),
+            Bool => MatrixData::Bool(),
         }
     }
 
@@ -403,7 +403,7 @@ impl MatrixData {
             Real => MatrixData::Real(Vec::with_capacity(nvals)),
             Complex => MatrixData::Complex(Vec::with_capacity(nvals), Vec::with_capacity(nvals)),
             Integer => MatrixData::Integer(Vec::with_capacity(nvals)),
-            Boolean => MatrixData::Boolean(),
+            Bool => MatrixData::Bool(),
         }
     }
 }
@@ -432,7 +432,7 @@ impl fmt::Debug for Matrix {
             MatrixData::Integer(xs) => {
                 wtr.field("int", &format_args!("{:?}", &xs[..n]));
             },
-            MatrixData::Boolean() => {
+            MatrixData::Bool() => {
                 /* nothing to do */
             },
         }
@@ -450,7 +450,7 @@ impl fmt::Display for Matrix {
                 Real(xs) => writeln!(f, "{} {} {}", self.rows[i], self.cols[i], xs[i]),
                 Complex(xs, ys) => writeln!(f, "{} {} {} {}", self.rows[i], self.cols[i], xs[i], ys[i]),
                 Integer(xs) => writeln!(f, "{} {} {}", self.rows[i], self.cols[i], xs[i]),
-                Boolean() => writeln!(f, "{} {}", self.rows[i], self.cols[i]),
+                Bool() => writeln!(f, "{} {}", self.rows[i], self.cols[i]),
             }
         })
     }
@@ -463,7 +463,7 @@ impl fmt::Display for DataType {
             Real => write!(f, "real"),
             Complex => write!(f, "complex"),
             Integer => write!(f, "integer"),
-            Boolean => write!(f, "boolean"),
+            Bool => write!(f, "bool"),
         }
     }
 }
