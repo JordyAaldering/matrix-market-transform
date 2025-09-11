@@ -1,5 +1,6 @@
-use std::{fmt, io::{BufRead, BufReader, Read}};
+use std::{fmt, fs, io::{BufRead, BufReader, Read}, str};
 
+use memmap2::MmapOptions;
 use rayon::prelude::*;
 
 #[repr(align(64))]
@@ -18,7 +19,7 @@ enum MatrixData {
     Real(Vec<f32>),
     Complex(Vec<f32>, Vec<f32>),
     Integer(Vec<i32>),
-    Binary(),
+    Boolean(),
 }
 
 #[cfg(feature = "x64")]
@@ -27,7 +28,7 @@ enum MatrixData {
     Real(Vec<f64>),
     Complex(Vec<f64>, Vec<f64>),
     Integer(Vec<i64>),
-    Binary(),
+    Boolean(),
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -36,12 +37,107 @@ pub enum DataType {
     Real,
     Complex,
     Integer,
-    Binary,
+    Boolean,
 }
 
 impl Matrix {
+    pub fn from_mmap(file: fs::File, data_type: DataType) -> Self {
+        let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+
+        let lines: Vec<&[u8]> = mmap.split(|&b| b == b'\n')
+            // We deliberately do not apply a `map` here first to trim, because we want to do minimal processing while still in sequential mode
+            .skip_while(|b| b.trim_ascii()[0] == b'%')
+            .collect();
+
+        if let Some((&header, tail)) = lines.split_first() {
+            let parts: Vec<_> = header.split(|&b| b.is_ascii_whitespace()).collect();
+            let nrows = str::from_utf8(parts[0]).unwrap().parse().unwrap();
+            let ncols = str::from_utf8(parts[1]).unwrap().parse().unwrap();
+            let nvals = str::from_utf8(parts[2]).unwrap().parse().unwrap();
+
+            let mut rows = vec![0usize; nvals];
+            let mut cols = vec![0usize; nvals];
+
+            let vals = match data_type {
+                DataType::Real => {
+                    let mut xs = vec![0.0; nvals];
+
+                    tail.into_par_iter()
+                        .zip(rows.par_iter_mut())
+                        .zip(cols.par_iter_mut())
+                        .zip(xs.par_iter_mut())
+                        .for_each(|(((line, row), col), x)| {
+                            let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
+                            *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
+                            *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
+                            *x = str::from_utf8(parts[2]).unwrap().parse().unwrap();
+                        });
+
+                    MatrixData::Real(xs)
+                },
+                DataType::Complex => {
+                    let mut xs = vec![0.0; nvals];
+                    let mut ys = vec![0.0; nvals];
+
+                    tail.into_par_iter()
+                        .zip(rows.par_iter_mut())
+                        .zip(cols.par_iter_mut())
+                        .zip(xs.par_iter_mut())
+                        .zip(ys.par_iter_mut())
+                        .for_each(|((((line, row), col), x), y)| {
+                            let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
+                            *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
+                            *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
+                            *x = str::from_utf8(parts[2]).unwrap().parse().unwrap();
+                            *y = str::from_utf8(parts[3]).unwrap().parse().unwrap();
+                        });
+
+                    MatrixData::Complex(xs, ys)
+                },
+                DataType::Integer => {
+                    let mut xs = vec![0; nvals];
+
+                    tail.into_par_iter()
+                        .zip(rows.par_iter_mut())
+                        .zip(cols.par_iter_mut())
+                        .zip(xs.par_iter_mut())
+                        .for_each(|(((line, row), col), x)| {
+                            let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
+                            *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
+                            *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
+                            *x = str::from_utf8(parts[2]).unwrap().parse().unwrap();
+                        });
+
+                    MatrixData::Integer(xs)
+                },
+                DataType::Boolean => {
+                    tail.into_par_iter()
+                        .zip(rows.par_iter_mut())
+                        .zip(cols.par_iter_mut())
+                        .for_each(|((line, row), col)| {
+                            let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
+                            *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
+                            *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
+                        });
+
+                    MatrixData::Boolean()
+                },
+            };
+
+            Self { rows, cols, vals, nrows, ncols, nvals }
+        } else {
+            // File is empty or contains only comments, return empty matrix
+            Self {
+                rows: Vec::new(),
+                cols: Vec::new(),
+                vals: MatrixData::new(data_type),
+                nrows: 0, ncols: 0, nvals: 0,
+            }
+        }
+    }
+
     #[inline]
-    pub fn from_reader<R: Read>(rdr: &mut BufReader<R>, data_type: DataType) -> Self {
+    pub fn from_reader<R: Read>(rdr: BufReader<R>, data_type: DataType) -> Self {
         let mut lines = rdr.lines()
             .map_while(Result::ok)
             .skip_while(|line| line.starts_with('%'));
@@ -73,7 +169,7 @@ impl Matrix {
                     MatrixData::Integer(xs) => {
                         xs.push(parts.next().unwrap().parse().unwrap())
                     },
-                    MatrixData::Binary() => {
+                    MatrixData::Boolean() => {
                         /* nothing to do */
                     },
                 }
@@ -147,7 +243,7 @@ impl Matrix {
                         *x = e.2;
                     });
             },
-            MatrixData::Binary() => {
+            MatrixData::Boolean() => {
                 let mut zipped: Vec<_> = (0..self.nvals)
                     .map(|i| (self.rows[i], self.cols[i]))
                     .collect();
@@ -227,7 +323,7 @@ impl Matrix {
                         *x = e.2;
                     });
             },
-            MatrixData::Binary() => {
+            MatrixData::Boolean() => {
                 let mut zipped: Vec<_> = (0..self.nvals)
                     .map(|i| (self.rows[i], self.cols[i]))
                     .collect();
@@ -288,7 +384,7 @@ impl Matrix {
     //         MatrixData::Integer(xs) => {
     //             xs.swap(a, b);
     //         },
-    //         MatrixData::Binary() => {
+    //         MatrixData::Boolean() => {
     //             /* nothing to do */
     //         },
     //     }
@@ -303,7 +399,7 @@ impl MatrixData {
             Real => MatrixData::Real(Vec::new()),
             Complex => MatrixData::Complex(Vec::new(), Vec::new()),
             Integer => MatrixData::Integer(Vec::new()),
-            Binary => MatrixData::Binary(),
+            Boolean => MatrixData::Boolean(),
         }
     }
 
@@ -314,7 +410,7 @@ impl MatrixData {
             Real => MatrixData::Real(Vec::with_capacity(nvals)),
             Complex => MatrixData::Complex(Vec::with_capacity(nvals), Vec::with_capacity(nvals)),
             Integer => MatrixData::Integer(Vec::with_capacity(nvals)),
-            Binary => MatrixData::Binary(),
+            Boolean => MatrixData::Boolean(),
         }
     }
 }
@@ -343,7 +439,7 @@ impl fmt::Debug for Matrix {
             MatrixData::Integer(xs) => {
                 wtr.field("int", &format_args!("{:?}", &xs[..n]));
             },
-            MatrixData::Binary() => {
+            MatrixData::Boolean() => {
                 /* nothing to do */
             },
         }
@@ -361,7 +457,7 @@ impl fmt::Display for Matrix {
                 Real(xs) => writeln!(f, "{} {} {}", self.rows[i], self.cols[i], xs[i]),
                 Complex(xs, ys) => writeln!(f, "{} {} {} {}", self.rows[i], self.cols[i], xs[i], ys[i]),
                 Integer(xs) => writeln!(f, "{} {} {}", self.rows[i], self.cols[i], xs[i]),
-                Binary() => writeln!(f, "{} {}", self.rows[i], self.cols[i]),
+                Boolean() => writeln!(f, "{} {}", self.rows[i], self.cols[i]),
             }
         })
     }
@@ -374,7 +470,7 @@ impl fmt::Display for DataType {
             Real => write!(f, "real"),
             Complex => write!(f, "complex"),
             Integer => write!(f, "integer"),
-            Binary => write!(f, "binary"),
+            Boolean => write!(f, "boolean"),
         }
     }
 }

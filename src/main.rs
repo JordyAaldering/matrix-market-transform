@@ -1,7 +1,7 @@
 use std::{
     fmt,
     fs::File,
-    io::{self, BufReader, BufWriter, Write},
+    io::{self, BufWriter, Write},
     path::PathBuf,
     time::Instant,
 };
@@ -50,10 +50,11 @@ fn main() -> io::Result<()> {
     } = Args::parse();
 
     let file = File::open(input_file)?;
-    let mut rdr = BufReader::new(file);
+    // let rdr = BufReader::new(file);
 
     let now = Instant::now();
-    let mut m = Matrix::from_reader(&mut rdr, data_type);
+    let mut m = Matrix::from_mmap(file, data_type);
+    //let mut m = Matrix::from_reader(rdr, data_type);
     println!("Read: {:?}", now.elapsed());
     println!("{:#?}", m);
 

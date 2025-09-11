@@ -22,4 +22,5 @@ x64 = []
 
 [dependencies]
 clap = { version = "4.5.47", features = ["derive"] }
+memmap2 = "0.9.8"
 rayon = "1.11.0"
