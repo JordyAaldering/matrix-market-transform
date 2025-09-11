@@ -1,4 +1,4 @@
-use std::{fmt, fs, io::{BufRead, BufReader, Read}, str};
+use std::{fmt, fs, io::{BufRead, BufReader, Read}, str::{self, FromStr}};
 
 use memmap2::MmapOptions;
 use rayon::prelude::*;
@@ -49,9 +49,9 @@ impl Matrix {
 
         if let Some(header) = lines.next() {
             let parts: Vec<_> = header.split(|&b| b.is_ascii_whitespace()).collect();
-            let nrows = str::from_utf8(parts[0]).unwrap().parse().unwrap();
-            let ncols = str::from_utf8(parts[1]).unwrap().parse().unwrap();
-            let nvals = str::from_utf8(parts[2]).unwrap().parse().unwrap();
+            let nrows = parse_utf8(parts[0]);
+            let ncols = parse_utf8(parts[1]);
+            let nvals = parse_utf8(parts[2]);
 
             let mut rows = vec![0usize; nvals];
             let mut cols = vec![0usize; nvals];
@@ -67,9 +67,9 @@ impl Matrix {
                     tail.zip(xs.par_iter_mut())
                         .for_each(|(((line, row), col), x)| {
                             let parts: Vec<_> = line.trim_ascii().split(|&b| b.is_ascii_whitespace()).collect();
-                            *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
-                            *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
-                            *x = str::from_utf8(parts[2]).unwrap().parse().unwrap();
+                            *row = parse_utf8(parts[0]);
+                            *col = parse_utf8(parts[1]);
+                            *x = parse_utf8(parts[2]);
                         });
                     MatrixData::Real(xs)
                 },
@@ -80,10 +80,10 @@ impl Matrix {
                         .zip(ys.par_iter_mut())
                         .for_each(|((((line, row), col), x), y)| {
                             let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
-                            *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
-                            *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
-                            *x = str::from_utf8(parts[2]).unwrap().parse().unwrap();
-                            *y = str::from_utf8(parts[3]).unwrap().parse().unwrap();
+                            *row = parse_utf8(parts[0]);
+                            *col = parse_utf8(parts[1]);
+                            *x = parse_utf8(parts[2]);
+                            *y = parse_utf8(parts[3]);
                         });
                     MatrixData::Complex(xs, ys)
                 },
@@ -92,17 +92,17 @@ impl Matrix {
                     tail.zip(xs.par_iter_mut())
                         .for_each(|(((line, row), col), x)| {
                             let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
-                            *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
-                            *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
-                            *x = str::from_utf8(parts[2]).unwrap().parse().unwrap();
+                            *row = parse_utf8(parts[0]);
+                            *col = parse_utf8(parts[1]);
+                            *x = parse_utf8(parts[2]);
                         });
                     MatrixData::Integer(xs)
                 },
                 DataType::Bool => {
                     tail.for_each(|((line, row), col)| {
                             let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
-                            *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
-                            *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
+                            *row = parse_utf8(parts[0]);
+                            *col = parse_utf8(parts[1]);
                         });
                     MatrixData::Bool()
                 },
@@ -458,6 +458,15 @@ impl fmt::Display for DataType {
             Bool => write!(f, "bool"),
         }
     }
+}
+
+#[inline(always)]
+fn parse_utf8<T>(part: &[u8]) -> T
+where
+    T: FromStr,
+    T::Err: fmt::Debug,
+{
+    str::from_utf8(part).unwrap().parse().unwrap()
 }
 
 /// Mark the element at this index as visited by toggling the most-significant bit.
