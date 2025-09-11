@@ -130,6 +130,7 @@ impl Matrix {
     #[inline]
     fn swap(&mut self, a: usize, b: usize) {
         self.rows.swap(a, b);
+        self.cols.swap(a, b);
         match &mut self.vals {
             MatrixData::Real(xs) => {
                 xs.swap(a, b);
@@ -177,7 +178,8 @@ impl fmt::Debug for Matrix {
         let n = f.width().unwrap_or(5);
         let p = f.precision().unwrap_or(2);
 
-        let mut wtr = f.debug_struct("Matrix");
+        let name = if n >= self.nvals { "Matrix" } else { &format!("Matrix (head={n})") };
+        let mut wtr = f.debug_struct(name);
         wtr.field("nrows", &self.nrows)
             .field("ncols", &self.ncols)
             .field("nvals", &self.nvals)
