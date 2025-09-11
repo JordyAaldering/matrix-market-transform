@@ -56,14 +56,15 @@ impl Matrix {
             let mut rows = vec![0usize; nvals];
             let mut cols = vec![0usize; nvals];
 
-            let lines: Vec<_> = lines.collect();
+            let tail = lines.collect::<Vec<_>>()
+                .into_par_iter()
+                .zip(rows.par_iter_mut())
+                .zip(cols.par_iter_mut());
+
             let vals = match data_type {
                 DataType::Real => {
                     let mut xs = vec![0.0; nvals];
-                    lines.into_par_iter()
-                        .zip(rows.par_iter_mut())
-                        .zip(cols.par_iter_mut())
-                        .zip(xs.par_iter_mut())
+                    tail.zip(xs.par_iter_mut())
                         .for_each(|(((line, row), col), x)| {
                             let parts: Vec<_> = line.trim_ascii().split(|&b| b.is_ascii_whitespace()).collect();
                             *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
@@ -75,10 +76,7 @@ impl Matrix {
                 DataType::Complex => {
                     let mut xs = vec![0.0; nvals];
                     let mut ys = vec![0.0; nvals];
-                    lines.into_par_iter()
-                        .zip(rows.par_iter_mut())
-                        .zip(cols.par_iter_mut())
-                        .zip(xs.par_iter_mut())
+                    tail.zip(xs.par_iter_mut())
                         .zip(ys.par_iter_mut())
                         .for_each(|((((line, row), col), x), y)| {
                             let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
@@ -91,10 +89,7 @@ impl Matrix {
                 },
                 DataType::Integer => {
                     let mut xs = vec![0; nvals];
-                    lines.into_par_iter()
-                        .zip(rows.par_iter_mut())
-                        .zip(cols.par_iter_mut())
-                        .zip(xs.par_iter_mut())
+                    tail.zip(xs.par_iter_mut())
                         .for_each(|(((line, row), col), x)| {
                             let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
                             *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
@@ -104,10 +99,7 @@ impl Matrix {
                     MatrixData::Integer(xs)
                 },
                 DataType::Bool => {
-                    lines.into_par_iter()
-                        .zip(rows.par_iter_mut())
-                        .zip(cols.par_iter_mut())
-                        .for_each(|((line, row), col)| {
+                    tail.for_each(|((line, row), col)| {
                             let parts: Vec<_> = line.split(|&b| b.is_ascii_whitespace()).collect();
                             *row = str::from_utf8(parts[0]).unwrap().parse().unwrap();
                             *col = str::from_utf8(parts[1]).unwrap().parse().unwrap();
