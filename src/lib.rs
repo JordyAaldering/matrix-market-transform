@@ -1,5 +1,7 @@
 use std::{fmt, io::{BufRead, BufReader, Read}};
 
+use rayon::prelude::*;
+
 #[repr(align(64))]
 pub struct Matrix {
     rows: Vec<usize>,
@@ -10,21 +12,21 @@ pub struct Matrix {
     nvals: usize,
 }
 
-#[cfg(not(feature = "x32"))]
-#[repr(align(64))]
-enum MatrixData {
-    Real(Vec<f64>),
-    Complex(Vec<f64>, Vec<f64>),
-    Integer(Vec<i64>),
-    Binary(),
-}
-
-#[cfg(feature = "x32")]
+#[cfg(not(feature = "x64"))]
 #[repr(align(64))]
 enum MatrixData {
     Real(Vec<f32>),
     Complex(Vec<f32>, Vec<f32>),
     Integer(Vec<i32>),
+    Binary(),
+}
+
+#[cfg(feature = "x64")]
+#[repr(align(64))]
+enum MatrixData {
+    Real(Vec<f64>),
+    Complex(Vec<f64>, Vec<f64>),
+    Integer(Vec<i64>),
     Binary(),
 }
 
@@ -91,62 +93,206 @@ impl Matrix {
 
     #[inline]
     pub fn sort_row_major(&mut self) {
-        let mut permutation: Vec<_> = (0..self.nvals).collect();
-        permutation.sort_unstable_by(|&a, &b|
-            (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b])));
-        self.apply(permutation);
+        match &mut self.vals {
+            MatrixData::Real(xs) => {
+                let mut zipped: Vec<_> = (0..self.nvals)
+                    .map(|i| (self.rows[i], self.cols[i], xs[i]))
+                    .collect();
+
+                zipped.par_sort_unstable_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+
+                zipped.into_par_iter()
+                    .zip(self.rows.par_iter_mut())
+                    .zip(self.cols.par_iter_mut())
+                    .zip(xs.par_iter_mut())
+                    .for_each(|(((e, row), col), x)| {
+                        *row = e.0;
+                        *col = e.1;
+                        *x = e.2;
+                    });
+            },
+            MatrixData::Complex(xs, ys) => {
+                let mut zipped: Vec<_> = (0..self.nvals)
+                    .map(|i| (self.rows[i], self.cols[i], xs[i], ys[i]))
+                    .collect();
+
+                zipped.par_sort_unstable_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+
+                zipped.into_par_iter()
+                    .zip(self.rows.par_iter_mut())
+                    .zip(self.cols.par_iter_mut())
+                    .zip(xs.par_iter_mut())
+                    .zip(ys.par_iter_mut())
+                    .for_each(|((((e, row), col), x), y)| {
+                        *row = e.0;
+                        *col = e.1;
+                        *x = e.2;
+                        *y = e.3;
+                    });
+            },
+            MatrixData::Integer(xs) => {
+                let mut zipped: Vec<_> = (0..self.nvals)
+                    .map(|i| (self.rows[i], self.cols[i], xs[i]))
+                    .collect();
+
+                zipped.par_sort_unstable_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+
+                zipped.into_par_iter()
+                    .zip(self.rows.par_iter_mut())
+                    .zip(self.cols.par_iter_mut())
+                    .zip(xs.par_iter_mut())
+                    .for_each(|(((e, row), col), x)| {
+                        *row = e.0;
+                        *col = e.1;
+                        *x = e.2;
+                    });
+            },
+            MatrixData::Binary() => {
+                let mut zipped: Vec<_> = (0..self.nvals)
+                    .map(|i| (self.rows[i], self.cols[i]))
+                    .collect();
+
+                zipped.par_sort_unstable_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+
+                zipped.into_par_iter()
+                    .zip(self.rows.par_iter_mut())
+                    .zip(self.cols.par_iter_mut())
+                    .for_each(|((e, row), col)| {
+                        *row = e.0;
+                        *col = e.1;
+                    });
+            },
+        };
+
+        // // More memory-friendly approach:
+        // let mut permutation: Vec<_> = (0..self.nvals).collect();
+        // permutation.sort_unstable_by(|&a, &b|
+        //     (self.rows[a], self.cols[a]).cmp(&(self.rows[b], self.cols[b])));
+        // self.apply(permutation);
     }
 
     #[inline]
     pub fn sort_col_major(&mut self) {
-        let mut permutation: Vec<_> = (0..self.nvals).collect();
-        permutation.sort_unstable_by(|&a, &b|
-            (self.cols[a], self.rows[a]).cmp(&(self.cols[b], self.rows[b])));
-        self.apply(permutation);
-    }
-
-    #[inline]
-    fn apply(&mut self, mut permutation: Vec<usize>) {
-        for i in 0..self.nvals {
-            if is_visited(permutation[i]) {
-                continue;
-            }
-
-            let mut j = i;
-            let mut j_idx = permutation[i];
-
-            // When we loop back to the first index, we stop
-            while i != j_idx {
-                permutation[j] = mark_visited(j_idx);
-                self.swap(j, j_idx);
-                j = j_idx;
-                j_idx = permutation[j];
-            }
-
-            permutation[j] = mark_visited(j_idx);
-        }
-    }
-
-    #[inline]
-    fn swap(&mut self, a: usize, b: usize) {
-        self.rows.swap(a, b);
-        self.cols.swap(a, b);
         match &mut self.vals {
             MatrixData::Real(xs) => {
-                xs.swap(a, b);
+                let mut zipped: Vec<_> = (0..self.nvals)
+                    .map(|i| (self.rows[i], self.cols[i], xs[i]))
+                    .collect();
+
+                zipped.par_sort_unstable_by(|a, b| (a.1, a.0).cmp(&(b.1, b.0)));
+
+                zipped.into_par_iter()
+                    .zip(self.rows.par_iter_mut())
+                    .zip(self.cols.par_iter_mut())
+                    .zip(xs.par_iter_mut())
+                    .for_each(|(((e, row), col), x)| {
+                        *row = e.0;
+                        *col = e.1;
+                        *x = e.2;
+                    });
             },
             MatrixData::Complex(xs, ys) => {
-                xs.swap(a, b);
-                ys.swap(a, b);
+                let mut zipped: Vec<_> = (0..self.nvals)
+                    .map(|i| (self.rows[i], self.cols[i], xs[i], ys[i]))
+                    .collect();
+
+                zipped.par_sort_unstable_by(|a, b| (a.1, a.0).cmp(&(b.1, b.0)));
+
+                zipped.into_par_iter()
+                    .zip(self.rows.par_iter_mut())
+                    .zip(self.cols.par_iter_mut())
+                    .zip(xs.par_iter_mut())
+                    .zip(ys.par_iter_mut())
+                    .for_each(|((((e, row), col), x), y)| {
+                        *row = e.0;
+                        *col = e.1;
+                        *x = e.2;
+                        *y = e.3;
+                    });
             },
             MatrixData::Integer(xs) => {
-                xs.swap(a, b);
+                let mut zipped: Vec<_> = (0..self.nvals)
+                    .map(|i| (self.rows[i], self.cols[i], xs[i]))
+                    .collect();
+
+                zipped.par_sort_unstable_by(|a, b| (a.1, a.0).cmp(&(b.1, b.0)));
+
+                zipped.into_par_iter()
+                    .zip(self.rows.par_iter_mut())
+                    .zip(self.cols.par_iter_mut())
+                    .zip(xs.par_iter_mut())
+                    .for_each(|(((e, row), col), x)| {
+                        *row = e.0;
+                        *col = e.1;
+                        *x = e.2;
+                    });
             },
             MatrixData::Binary() => {
-                /* nothing to do */
+                let mut zipped: Vec<_> = (0..self.nvals)
+                    .map(|i| (self.rows[i], self.cols[i]))
+                    .collect();
+
+                zipped.par_sort_unstable_by(|a, b| (a.1, a.0).cmp(&(b.1, b.0)));
+
+                zipped.into_par_iter()
+                    .zip(self.rows.par_iter_mut())
+                    .zip(self.cols.par_iter_mut())
+                    .for_each(|((e, row), col)| {
+                        *row = e.0;
+                        *col = e.1;
+                    });
             },
-        }
+        };
+
+        // // More memory-friendly approach:
+        // let mut permutation: Vec<_> = (0..self.nvals).collect();
+        // permutation.sort_unstable_by(|&a, &b|
+        //     (self.cols[a], self.rows[a]).cmp(&(self.cols[b], self.rows[b])));
+        // self.apply(permutation);
     }
+
+    // #[inline]
+    // fn apply(&mut self, mut permutation: Vec<usize>) {
+    //     for i in 0..self.nvals {
+    //         if is_visited(permutation[i]) {
+    //             continue;
+    //         }
+
+    //         let mut j = i;
+    //         let mut j_idx = permutation[i];
+
+    //         // When we loop back to the first index, we stop
+    //         while i != j_idx {
+    //             permutation[j] = mark_visited(j_idx);
+    //             self.swap(j, j_idx);
+    //             j = j_idx;
+    //             j_idx = permutation[j];
+    //         }
+
+    //         permutation[j] = mark_visited(j_idx);
+    //     }
+    // }
+
+    // #[inline]
+    // fn swap(&mut self, a: usize, b: usize) {
+    //     self.rows.swap(a, b);
+    //     self.cols.swap(a, b);
+    //     match &mut self.vals {
+    //         MatrixData::Real(xs) => {
+    //             xs.swap(a, b);
+    //         },
+    //         MatrixData::Complex(xs, ys) => {
+    //             xs.swap(a, b);
+    //             ys.swap(a, b);
+    //         },
+    //         MatrixData::Integer(xs) => {
+    //             xs.swap(a, b);
+    //         },
+    //         MatrixData::Binary() => {
+    //             /* nothing to do */
+    //         },
+    //     }
+    // }
 }
 
 impl MatrixData {
@@ -233,16 +379,16 @@ impl fmt::Display for DataType {
     }
 }
 
-/// Mark the element at this index as visited by toggling the most-significant bit.
-#[inline(always)]
-fn mark_visited(idx: usize) -> usize {
-    const MASK: usize = isize::MIN as usize;
-    idx ^ MASK
-}
+// /// Mark the element at this index as visited by toggling the most-significant bit.
+// #[inline(always)]
+// fn mark_visited(idx: usize) -> usize {
+//     const MASK: usize = isize::MIN as usize;
+//     idx ^ MASK
+// }
 
-/// Check if the element at this index has been visited by reading the most-significant bit.
-#[inline(always)]
-fn is_visited(idx: usize) -> bool {
-    const MASK: usize = isize::MIN as usize;
-    (idx & MASK) != 0
-}
+// /// Check if the element at this index has been visited by reading the most-significant bit.
+// #[inline(always)]
+// fn is_visited(idx: usize) -> bool {
+//     const MASK: usize = isize::MIN as usize;
+//     (idx & MASK) != 0
+// }
