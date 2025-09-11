@@ -4,6 +4,7 @@ use memmap2::MmapOptions;
 use rayon::prelude::*;
 
 #[repr(align(64))]
+#[derive(Clone, PartialEq)]
 pub struct Matrix {
     rows: Vec<usize>,
     cols: Vec<usize>,
@@ -15,6 +16,7 @@ pub struct Matrix {
 
 #[cfg(not(feature = "x64"))]
 #[repr(align(64))]
+#[derive(Clone, PartialEq)]
 enum MatrixData {
     Real(Vec<f32>),
     Complex(Vec<f32>, Vec<f32>),
@@ -24,6 +26,7 @@ enum MatrixData {
 
 #[cfg(feature = "x64")]
 #[repr(align(64))]
+#[derive(Clone, PartialEq)]
 enum MatrixData {
     Real(Vec<f64>),
     Complex(Vec<f64>, Vec<f64>),
@@ -41,6 +44,10 @@ pub enum DataType {
 }
 
 impl Matrix {
+    pub fn nrows(&self) -> usize { self.nrows }
+    pub fn ncols(&self) -> usize { self.ncols }
+    pub fn nvals(&self) -> usize { self.nvals }
+
     pub fn from_mmap(file: fs::File, data_type: DataType) -> Self {
         let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
         let mut lines = mmap.split(|&b| b == b'\n')
